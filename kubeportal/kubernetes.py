@@ -95,7 +95,8 @@ def _sync_namespaces(request, core_v1, rbac_v1):
 
     # portal namespaces -> K8S namespaces
     success_count_push = 0
-    for portal_ns in KubernetesNamespace.objects.all():
+    db_namespaces = KubernetesNamespace.objects.all()
+    for portal_ns in db_namespaces:
         try:
             if portal_ns.uid:
                 # Portal namespace records with UID must be given in K8S, or they are
@@ -120,9 +121,16 @@ def _sync_namespaces(request, core_v1, rbac_v1):
                 if sanitized_name !=  portal_ns.name:
                     logger.warning("Given name '{}' for new Kubernetes namespace is invalid, replacing it with '{}'".format(portal_ns.name, sanitized_name))
                     messages.warning(request, "Given name '{}' for new Kubernetes namespace was invalid, chosen name is now '{}'".format(portal_ns.name, sanitized_name))
-                    # TODO: May already exist?
-                    portal_ns.name = sanitized_name
-                    portal_ns.save()
+
+                    # does a namespace with the sanitized name exist?
+                    # if not create one
+                    ns_exists = False
+                    for ns in db_namespaces:
+                        if ns.name == sanitized_name:
+                            ns_exists = True
+                    if not ns_exists:
+                        portal_ns.name = sanitized_name
+                        portal_ns.save()
                 created_k8s_ns = _create_k8s_ns(portal_ns.name, core_v1)
                 portal_ns.uid = created_k8s_ns.metadata.uid
                 portal_ns.save()
